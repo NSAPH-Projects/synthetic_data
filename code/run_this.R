@@ -15,17 +15,17 @@ source("r0_utility_functions.R")
 # Process exposure data
 source("r1_exposure_data.R")
 
-# Process gridMET data
-source("r2_gridmet_data.R")
-
 # Porcess census data
-source("r3_census_data.R")
-
-# Process Synthetic CMS data
-source("r4_syn_CMS_data.R")
+source("r2_census_data.R")
 
 # Process CDC data 
-source("r5_brfss_data.R")
+source("r3_brfss_data.R")
+
+# Process gridMET data
+source("r4_gridmet_data.R")
+
+# Process Synthetic CMS data
+source("r5_syn_CMS_data.R")
 
 # Join Data Together
 # This file uses saved files. You can run it separately if you have run the 

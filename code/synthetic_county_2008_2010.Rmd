@@ -1,11 +1,11 @@
 ---
-title: "Generating Public Dataset for Air Pollution and Health Studies, Case Study: 2010 County Level Dataset for the Contiguous United States"
+title: "Public Dataset for Air Pollution and Health Studies, Case Study: 2010 County-Level Dataset for the Contiguous United States"
 output: 
   html_document:
     toc: true
     toc_float:
-      collapsed: false
-      smooth_scroll: false
+      collapsed: true
+      smooth_scroll: true
     df_print: paged
 author: 
   name: Naeem Khoshnevis, Xiao Wu, Danielle Braun
@@ -22,11 +22,11 @@ knitr::opts_chunk$set(
 )
 ```
 
-## Summary
+# Summary
 
-We present steps to generate public data sets for benchmarking and illustration purposes for air pollution and health studies. In most of these studies, the health care data cannot be shared with the public; as a result, there are no public data sets to be used as benchmark data set for testing the packages or illustrating their functionalities.  CMS has generated synthetic data for the 2008-2010 range for Medicare data. This report uses these data, census, and exposure data to compile the study data set. 
+We present steps to generate public data sets for benchmarking and illustration purposes for air pollution and health studies. In most of these studies, the health care data cannot be shared with the public; as a result, there are no public data sets to be used as benchmark data set for testing the packages or illustrating their functionalities.  CMS has generated synthetic data for the 2008-2010 range for Medicare data. This report uses part of these data, census, and exposure data to compile the study data set. 
 
-## Data
+# Data
 
 There are three major categories for air pollution and health studies data sets: **Exposure**, **Confounders**, and **Outcome** data. We collect these data from different resources and compile them into the study data set. The compilation and aggregation can be done based on spatial and temporal features. This report is based on the annual average for 2010, aggregated at the county level for the Contiguous United States. Figure 1 shows the schematic data pipeline.
 
@@ -38,63 +38,102 @@ knitr::include_graphics("../figures/png/Figure1.png")
 
 <br>
 
-Each of these sources includes numerous fields. The research question will determine which fields should be used in the study. We go through each resource and briefly talk about the fields of interest in the following. We group these fields by Federal Information Processing Standards ([FIPS](https://support.esri.com/en/technical-article/000002594)) code. Each county in the United States has its dedicated FIPS code. We use the shapefile provided by the [United States Census Bureau](https://www.census.gov/geographies/mapping-files/time-series/geo/carto-boundary-file.2010.html) (file name: `gz_2010_us_050_00_500k.zip`). Also, in this report, we limit the study region to the Contiguous United States. The states' FIPS code are mentioned [here](https://www.nrcs.usda.gov/wps/portal/nrcs/detail/?cid=nrcs143_013696). Based on that, we drop the following states: `02`: Alaska, `15`: Hawaii, `60`: American Samoa, `66`: Guam, `69`: Northern Mariana Islands, `72`: Puerto Rico, `78`: Virgin Islands.
+Each of these sources includes numerous fields. The research question will determine which fields should be used in the study. We go through each resource and briefly talk about the fields of interest in the following. We group these fields by Federal Information Processing Standards FIPS code (@esri_fips). Each county in the United States has its dedicated FIPS code. We use the shapefile provided by the [United States Census Bureau](https://www.census.gov/geographies/mapping-files/time-series/geo/carto-boundary-file.2010.html) (@census_shape). Also, in this report, we limit the study region to the Contiguous United States. The states' FIPS code are mentioned on @nrcs. As a result, we drop the following states: 
 
-The following code loads the data and plots counties in New England.
+- `02`: Alaska,  
+- `15`: Hawaii, 
+- `60`: American Samoa, 
+- `66`: Guam, 
+- `69`: Northern Mariana Islands, 
+- `72`: Puerto Rico, and 
+- `78`: Virgin Islands.
 
 ```{r, warning=FALSE, message=FALSE}
 # Load libraries
+
+# Geospatial 
 library(sf)
 library(rgdal)
 library(dplyr)
-library(memoise)
-library(haven)
 library(ncdf4)
-library(PCICt)
+
+# SAS Data
+library(haven)
+
+# Census
 library(tidycensus)
-library(tidyverse)
+
+# General
 library(fst)
+library(PCICt)
+library(memoise)
+library(tidyverse)
 library(lubridate)
 library(data.table)
+
+# Setting up environment and helper functions
 source("setup_env_vals.R")
 source("r0_utility_functions.R")
 ```
+
+The following code loads the shapefiles data and plots counties in New England.
 
 ```{r, warning=FALSE, message=FALSE}
 # create the file path
 fpath_c <- file.path(get_options("input_dir"),
                    "public/Geospatial", "gz_2010_us_050_00_500k/")
 
-# read shape files
+# read shapefiles
 county_shape_file <-  rgdal::readOGR(fpath_c)
 
-# transform it into sp object
-county_shape_file <- spTransform(county_shape_file, CRS("+proj=longlat +datum=WGS84"))
+# transform shapefiles into sp object
+county_shape_file <- spTransform(county_shape_file,
+                                 CRS("+proj=longlat +datum=WGS84"))
 non_c_states <- c("02","15","60","66","69","72","78")
 cs_inland <- county_shape_file[!county_shape_file$STATE %in% non_c_states, ]
+
+# Generate FIPS code 
+cs_inland$FIPS <- paste(cs_inland$STATE,cs_inland$COUNTY,sep = "")
 
 # select states in New England
 NE_c <- cs_inland[cs_inland$STATE %in% c("9","23","25","33","44","50"),]
 plot(NE_c)
 ```
 
-
-### Exposure Data
-
-In this report, we are interested in the causal effect of air pollution on the mortality rate. The exposure parameter is $PM_{2.5}$. @di2019ensemble provided daily, and annual $PM_{2.5}$ estimates at $1\ km \times 1 \ km$ grid cells in the entire united statues. The data can be downloaded from [here](https://beta.sedac.ciesin.columbia.edu/data/set/aqdh-pm2-5-concentrations-contiguous-us-1-km-2000-2016/metadata). [TODO: Add NASA citation.]
+The following table shows the list of the states and the number of counties per state. 
 
 ```{r, cache=TRUE}
+cs_inland_val <- data.frame(cs_inland[, c("STATE","COUNTY", "NAME","FIPS")])
+state_county <- cs_inland_val %>% group_by(STATE) %>% count()
+state_fips <- read.csv(file.path(get_options("input_dir"),
+                   "public/Geospatial", "FIPS_state_crosswalk.csv"))
+state_fips$STATE <- sprintf("%02d", state_fips$FIPS)
+state_fips$FIPS <- NULL
+joined_data <- inner_join(state_county, state_fips, by="STATE")
+state_name_county <- data.frame(joined_data$NAME, joined_data$POSTAL.CODE,
+                                joined_data$STATE, joined_data$n)
+names(state_name_county) <- c("Name", "Code", "FIPS", "Num of Counties")
+state_name_county
+```
+
+In summary, in 2010, there are 49 contiguous states (48 + DC), and `r nrow(cs_inland_val)` counties. The crosswalk file to convert FIPS code into State name is available from different resources including @nrcs.
+
+## Exposure Data
+
+In this report, we are interested in the causal effect of air pollution on the mortality rate. The exposure parameter is $PM_{2.5}$. @di2019ensemble provided daily, and annual $PM_{2.5}$ estimates at $1\ km \times 1 \ km$ grid cells in the entire United States. The data can be downloaded from @nasa_pm25.
+
+```{r, cache=TRUE}
+
 # Set up memoization
 cd <- cachem::cache_disk(pr_cache)
-
 m_match_exposure_to_sitecode <- memoise(match_exposure_to_sitecode, cache = cd)
 m_map_point_shape <- memoise(map_point_shape, cache = cd)
 
 # Create file path for each rds file and read data.
-fpath_2010 <- file.path(get_options("input_dir"),"public/Di_2019","2010.rds")
+fpath <- file.path(get_options("input_dir"),"public/Di_2019","2010.rds")
 usgpath <- file.path(get_options("input_dir"),"public/Di_2019","USGridSite.rds")
 
-di_pm25_2010 <- readRDS(fpath_2010)
+di_pm25_2010 <- readRDS(fpath)
 us_grid <- readRDS(usgpath)
 
 # match exposure to sitecode
@@ -102,7 +141,7 @@ pm25_2010 <- m_match_exposure_to_sitecode(site_code = us_grid,
                                           exp_data = di_pm25_2010,
                                           exp_name = "pm25")
 
-# Generate FIPS code for the shape file
+# Generate FIPS code for the shapefile
 cs_inland$FIPS <- paste(cs_inland$STATE,cs_inland$COUNTY,sep = "")
 
 # Convert PM2.5 data frame to SpatialPoints data frame
@@ -118,14 +157,13 @@ cs_inland_pm_2010 <- m_map_point_shape(shape_object = cs_inland,
                                        field_na_drop = "STATE")
 
 # Group and aggregate data for FIPS code level
+pm_data <- cs_inland_pm_2010 %>%
+           group_by(FIPS) %>%
+           summarise(mean_pm25 = mean(pm25))
 
-aggregated_pm_data_2010 <- cs_inland_pm_2010 %>%
-  group_by(FIPS) %>%
-  summarise(mean_pm25 = mean(pm25))
 
-# Take a look at data
 # merge the new values with the shape file.
-merged_obj <- merge(cs_inland, aggregated_pm_data_2010, by=c("FIPS"))
+merged_obj <- merge(cs_inland, pm_data, by=c("FIPS"))
 
 spplot(merged_obj, zcol = "mean_pm25",
        col.regions=heat.colors(51, rev = TRUE),
@@ -133,33 +171,35 @@ spplot(merged_obj, zcol = "mean_pm25",
        main="Mean PM2.5 in the Contiguous United States (2010)")
 ```
 
-### Census Data
+There are `r nrow(pm_data)` counties with exposure data. Number of counties with missing data: `r nrow(cs_inland_val) - nrow(pm_data)` counties.
 
-The main reference for getting the census data is the [United States Census Bureau](https://www.census.gov/en.html). There are numerous studies and surveys for different geographical resolutions. Reviewing these details is beyond the scope of this report; however, it is strongly recommended to get familiar with tables and their labels. The census bureau has a convenient API to download data. [tidycensus](https://walker-data.com/tidycensus/index.html) is an R package that allows users to interface with a select number of the US Census Bureau’s data APIs and return tidyverse-ready data frames. The census data comes for different geographical resolutions. We download data for counties from [acs5](https://www.census.gov/data/developers/data-sets/acs-5year.html) source.  
+## Census Data
+
+The main reference for getting the census data is the [United States Census Bureau](https://www.census.gov/en.html). There are numerous studies and surveys for different geographical resolutions. Reviewing these details is beyond the scope of this report; however, it is strongly recommended to get familiar with tables and their labels. The census bureau has a convenient API to download data. [tidycensus](https://walker-data.com/tidycensus/index.html) is an R package that allows users to interface with a select number of the US Census Bureau data APIs and return tidyverse-ready data frames (@tidycensus). The census data comes for different geographical resolutions. We download data for counties from [acs5](https://www.census.gov/data/developers/data-sets/acs-5year.html) source.  
 
 Here is the list of variables that are available in 2010 for acs5:
 
-| Name        | Label                                                                                        | Concept                                                                            |
+| Name        | Label (Estimated Values)                                                                     | Concept                                                                            |
 |-------------|----------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------|
-| B01001_001  | Estimate!!Total                                                                              | SEX BY AGE                                                                         |
-| B17001_002  | Estimate!!Total!!Income in the past 12 months below poverty level                            | POVERTY STATUS IN THE PAST 12 MONTHS BY SEX BY AGE                                 |
-| B17001_001  | Estimate!!Total                                                                              | POVERTY STATUS IN THE PAST 12 MONTHS BY SEX BY AGE                                 |
-| B03001_001  | Estimate!!Total                                                                              | HISPANIC OR LATINO ORIGIN BY SPECIFIC ORIGIN                                       |
-| B03001_003  | Estimate!!Total!!Hispanic or Latino                                                          | HISPANIC OR LATINO ORIGIN BY SPECIFIC ORIGIN                                       |
-| B25077_001  | Estimate!!Median value (dollars)                                                             | MEDIAN VALUE (DOLLARS)                                                             |
-| B02001_003  | Estimate!!Total!!Black or African American alone                                             | RACE                                                                               |
-| B02001_001  | Estimate!!Total                                                                              | RACE                                                                               |
-| B02001_002  | Estimate!!Total!!White alone                                                                 | RACE                                                                               |                                                        
-| B02001_004  | Estimate!!Total!!American Indian and Alaska Native alone                                     | RACE                                                                               |
-| B02001_005  | Estimate!!Total!!Asian alone                                                                 | RACE                                                                               |
-| B19013_001  | Estimate!!Median household income in the past 12 months (in 2010 inflation-adjusted dollars) | MEDIAN HOUSEHOLD INCOME IN THE PAST 12 MONTHS (IN 2010 INFLATION-ADJUSTED DOLLARS) |
-| B25003_002  | Estimate!!Total!!Owner occupied                                                              | TENURE                                                                             |
-| B25003_001  | Estimate!!Total                                                                              | TENURE                                                                             |
-| B01002_001  | Estimate!!Median age!!Total                                                                  | MEDIAN AGE BY SEX                                                                  |
+| B01001_001  | Total                                                                                        | SEX BY AGE                                                                         |
+| B17001_002  | Income in the past 12 months below poverty level                                             | POVERTY STATUS IN THE PAST 12 MONTHS BY SEX BY AGE                                 |
+| B17001_001  | Total                                                                                        | POVERTY STATUS IN THE PAST 12 MONTHS BY SEX BY AGE                                 |
+| B03001_001  | Total                                                                                        | HISPANIC OR LATINO ORIGIN BY SPECIFIC ORIGIN                                       |
+| B03001_003  | Total!!Hispanic or Latino                                                                    | HISPANIC OR LATINO ORIGIN BY SPECIFIC ORIGIN                                       |
+| B25077_001  | Median value (dollars)                                                                       | MEDIAN VALUE (DOLLARS)                                                             |
+| B02001_003  | Total!!Black or African American alone                                                       | RACE                                                                               |
+| B02001_001  | Total                                                                                        | RACE                                                                               |
+| B02001_002  | Total!!White alone                                                                           | RACE                                                                               |
+| B02001_004  | Total!!American Indian and Alaska Native alone                                               | RACE                                                                               |
+| B02001_005  | Total!!Asian alone                                                                           | RACE                                                                               |
+| B19013_001  | Median household income in the past 12 months (in 2010 inflation-adjusted dollars)           | MEDIAN HOUSEHOLD INCOME IN THE PAST 12 MONTHS (IN 2010 INFLATION-ADJUSTED DOLLARS) |
+| B25003_002  | Total!!Owner occupied                                                                        | TENURE                                                                             |
+| B25003_001  | Total                                                                                        | TENURE                                                                             |
+| B01002_001  | Median age!!Total                                                                            | MEDIAN AGE BY SEX                                                                  |
 
 Use the following command to see the variables for each year and source:
 
-```{r}
+```{r, cache=TRUE}
 v10 <- load_variables(2010, "acs5", cache = TRUE)
 ```
 
@@ -167,7 +207,7 @@ In the following we download the data and create the variables.
 
 ```{r, cache=TRUE}
 
-census_api_key("5fdd0d482ac4e49d1064bf653ef36f0428de407c")
+census_api_key(Sys.getenv("CENSUS_API_KEY"))
 census_vars <- c("B01001_001", "B17001_002", "B17001_001", "B03001_001",
                  "B03001_003", "B01001_001", "B25077_001", "B02001_003",
                  "B02001_001", "B02001_002", "B02001_004", "B02001_005",
@@ -182,8 +222,14 @@ census_2010 <- get_acs(geography = "county",
 # Drop Margin of error column. 
 census_2010_e <- census_2010 %>% select(-ends_with("M"))
 
+census_2010_e$STATE <- substr(census_2010_e$GEOID, 1, 2)
+census_2010_e$COUNTY <- substr(census_2010_e$GEOID, 3, 5)
+
+inland_states <- state_county$STATE
+census_2010_e_inland <- census_2010_e[census_2010_e$STATE %in% inland_states, ]
+
 # add new variables
-census_2010_e_m <- census_2010_e %>%
+census_2010_e_m <- census_2010_e_inland %>%
                    add_column(poverty = .$B17001_002E/.$B17001_001E,
                               pct_hispanic = .$B03001_003E/.$B03001_001E,
                               pct_black = .$B02001_003E/.$B02001_001E,
@@ -196,15 +242,17 @@ census_2010_e_m <- census_2010_e %>%
                               median_age = .$B01002_001E)
 
 # Drop initial columns
-census_2010_processed <- census_2010_e_m %>%
-                             select(!matches("B[0-9]+_[0-9]+E"))
+census_data <- census_2010_e_m %>%
+               select(!matches("B[0-9]+_[0-9]+E"))
 
-colnames(census_2010_processed)[which(names(census_2010_processed) == "GEOID")] <- "FIPS"
+colnames(census_data)[which(names(census_data) == "GEOID")] <- "FIPS"
 
+census_data$STATE <- NULL
+census_data$COUNTY <- NULL
 
 # Take a look at data
 # merge the new values with the shape file.
-merged_obj <- merge(cs_inland, census_2010_processed, by=c("FIPS"))
+merged_obj <- merge(cs_inland, census_data, by=c("FIPS"))
 
 spplot(merged_obj, zcol = "median_house_value",
        col.regions=terrain.colors(51, rev = FALSE),
@@ -213,9 +261,15 @@ spplot(merged_obj, zcol = "median_house_value",
 
 ```
 
-### CDC Data
+There are `r nrow(census_data)` counties' data in the census data. The following shows the available column names and number of missing data per column in the census data. 
 
-The Centers for Disease Control and Prevention ([CDC](https://www.cdc.gov/)), provides the Behavioral Risk Factor Surveillance System ([BRFSS](https://www.cdc.gov/brfss/about/archived.htm)), which is the nation's premier system of health-related telephone surveys that collect state data about U.S. residents regarding their health-related risk behaviors. In this report, we are interested in the participants' body mass index (BMI) and smoking status. The BRFSS data also is provided at the county level. We download the data in SAS format from this [webpage](https://www.cdc.gov/brfss/annual_data/annual_2010.htm) and load it into R using the [haven](https://haven.tidyverse.org/) R package. The definition of variables is mentioned in this [codebook](https://www.cdc.gov/brfss/annual_data/2010/pdf/codebook_10.pdf).
+```{r, cache=TRUE}
+sapply(census_data, function(x) sum(is.na(x)))
+```
+
+## CDC Data
+
+The Centers for Disease Control and Prevention ([CDC](https://www.cdc.gov/)), provides the Behavioral Risk Factor Surveillance System (@cdc_brfss), which is the nation's premier system of health-related telephone surveys that collect state data about U.S. residents regarding their health-related risk behaviors. In this report, we are interested in the participants' body mass index (BMI) and smoking status. The BRFSS data also is provided at the county level. We download the data in SAS format from this [webpage](https://www.cdc.gov/brfss/annual_data/annual_2010.htm) and load it into R using the [haven](https://haven.tidyverse.org/) R package (@haven). The definition of variables is mentioned in this [codebook](https://www.cdc.gov/brfss/annual_data/2010/pdf/codebook_10.pdf).
 
 ```{r, cache=TRUE}
 
@@ -231,19 +285,54 @@ names(brfss_2010_subset) <- c("state","county","bmi","smoker")
 
 # Polish vars
 brfss_data_2010 <- polish_bfrss_vars(brfss_2010_subset)
-
-merged_obj <- merge(cs_inland, brfss_data_2010, by=c("FIPS"))
-spplot(merged_obj, zcol = "pct_cusmoker",
-       col.regions=heat.colors(51, rev = TRUE),
-       xlab="Longitude", ylab="Latitude",
-       main="Percentage of Current Smokers in the Contiguous United States (2010)")
 ```
 
-The BRFSS data is a phone survey, as a result, there are many missing values. 
+### Missing Values 
 
-### GridMET data 
+The BRFSS data is a phone survey, as a result, there are many missing values. From entire CDC data, `r sprintf("%02.2f", (sum(is.na(brfss_2010_subset$county))/nrow(brfss_2010_subset))*100)`% of data has missing county values, and there are `r nrow(cs_inland_val) - nrow(brfss_data_2010)` counties without any reported values. 
 
-Climatology Lab at the University of California, Merced, provides the [GridMET](https://www.climatologylab.org/gridmet.html) data.  The data set is daily surface meteorological data covering the contiguous United States. This report is interested in average minimum and maximum temperature, average minimum and maximum humidity, and specific humidity. Data comes in NetCDF4 format. We use [ncdf4](https://cran.r-project.org/web/packages/ncdf4/index.html) to load the data. 
+```{r, cache=TRUE}
+merged_obj <- merge(cs_inland, brfss_data_2010, by=c("FIPS"))
+merged_obj$missing <- as.factor(ifelse(is.na(merged_obj$mean_bmi), 1, 0))
+
+spplot(merged_obj, zcol = "missing",
+       col.regions=c("snow","red"),
+       col = "grey61",
+       xlab="Longitude", ylab="Latitude",
+       main="Counties with Missing CDC Data")
+
+```
+
+Discussing methods for imputing missing values is beyond the scope of this report. In this report, we generate a normal distribution of each parameter for each state and choose a value at random for counties with missing values. 
+```{r, cache=TRUE}
+brfss_data <- data.frame(
+           merged_obj[, c("FIPS", "STATE", "COUNTY", "mean_bmi", "pct_cusmoker", 
+                          "pct_sdsmoker", "pct_fmsmoker", "pct_nvsmoker", 
+                          "pct_nnsmoker")])
+
+# 9999 is assigned for those who answered the survey but refused to answer 
+# specific questions, we treat them as missing values
+brfss_data$mean_bmi <- ifelse(brfss_data$mean_bmi == 9999, NA,
+                              brfss_data$mean_bmi)
+
+brfss_data <- impute_cdc(
+  data = brfss_data,
+  param_list = c("mean_bmi", "pct_cusmoker", 
+                 "pct_sdsmoker","pct_fmsmoker",
+                 "pct_nvsmoker",
+                 "pct_nnsmoker"))
+
+merged_obj <- merge(cs_inland, brfss_data, by=c("FIPS"))
+spplot(merged_obj, zcol = "mean_bmi",
+       col.regions=heat.colors(51, rev = TRUE),
+       xlab="Longitude", ylab="Latitude",
+       main="Mean Body Mass Index in the Contiguous United States (2010)")
+```
+
+
+## GridMET data 
+
+Climatology Lab at the University of California, Merced, provides the [GridMET](https://www.climatologylab.org/gridmet.html) data (@abatzoglou2013development).  The data set is daily surface meteorological data covering the contiguous United States. This report is interested in average minimum and maximum temperature, average minimum and maximum humidity, and specific humidity. Data comes in NetCDF4 format. We use [ncdf4](https://cran.r-project.org/web/packages/ncdf4/index.html) to load the data (@ncdf). 
 
 ```{r, cache=TRUE}
 
@@ -253,93 +342,83 @@ m_map_point_shape <- memoise(map_point_shape, cache = cd)
 
 year <- 2010
 
-# Temrature 
-tmmn_path <- file.path(get_options("input_dir"),
-                            "public/gridmet_data",
-                            paste0("tmmn_",year,".nc"))
-tmmx_path <- file.path(get_options("input_dir"),
-                            "public/gridmet_data",
-                            paste0("tmmx_",year,".nc"))
+# Temperature 
+tmmn_path <- file.path(get_options("input_dir"), "public/gridmet_data",
+                            paste0("tmmn_",year, ".nc"))
+tmmx_path <- file.path(get_options("input_dir"), "public/gridmet_data",
+                            paste0("tmmx_",year, ".nc"))
 
 # Humidity 
-
-rmin_path <- file.path(get_options("input_dir"),
-                            "public/gridmet_data",
-                            paste0("rmin_",year,".nc"))
-rmax_path <- file.path(get_options("input_dir"),
-                            "public/gridmet_data",
-                            paste0("rmax_",year,".nc"))
-
-sph_path <- file.path(get_options("input_dir"),
-                            "public/gridmet_data",
-                           paste0("sph_",year,".nc"))
+rmin_path <- file.path(get_options("input_dir"), "public/gridmet_data",
+                            paste0("rmin_",year, ".nc"))
+rmax_path <- file.path(get_options("input_dir"), "public/gridmet_data",
+                            paste0("rmax_",year, ".nc"))
+sph_path <- file.path(get_options("input_dir"), "public/gridmet_data",
+                            paste0("sph_",year,".nc"))
 
 tmmn <- compile_gridmet_data(nc_path = tmmn_path, 
-                                  param_name = "air_temperature",
-                                  start_date = paste0(year,"-01-01"),
-                                  end_date = paste0(year,"-12-30"),
-                                  agg_fun = mean,
-                                  shape_obj = cs_inland,
-                                  extra_fields_name = c("STATE","COUNTY",
-                                                        "NAME","FIPS"),
-                                  group_field_name = "FIPS",
-                                  field_na_drop = "STATE",
-                                  agg_field_name = "mean_tmmn")
+                             param_name = "air_temperature",
+                             start_date = paste0(year,"-01-01"),
+                             end_date = paste0(year,"-12-30"),
+                             agg_fun = mean,
+                             shape_obj = cs_inland,
+                             extra_fields_name = c("STATE","COUNTY",
+                                                   "NAME","FIPS"),
+                             group_field_name = "FIPS",
+                             field_na_drop = "STATE",
+                             agg_field_name = "mean_tmmn")
 
 tmmx <- compile_gridmet_data(nc_path = tmmx_path, 
-                                  param_name = "air_temperature",
-                                  start_date = paste0(year,"-01-01"),
-                                  end_date = paste0(year,"-12-30"),
-                                  agg_fun = mean,
-                                  shape_obj = cs_inland,
-                                  extra_fields_name = c("STATE","COUNTY",
-                                                        "NAME","FIPS"),
-                                  group_field_name = "FIPS",
-                                  field_na_drop = "STATE",
-                                  agg_field_name = "mean_tmmx")
+                             param_name = "air_temperature",
+                             start_date = paste0(year,"-01-01"),
+                             end_date = paste0(year,"-12-30"),
+                             agg_fun = mean,
+                             shape_obj = cs_inland,
+                             extra_fields_name = c("STATE","COUNTY",
+                                                   "NAME","FIPS"),
+                             group_field_name = "FIPS",
+                             field_na_drop = "STATE",
+                             agg_field_name = "mean_tmmx")
 
 rmn <- compile_gridmet_data(nc_path = rmin_path, 
-                                  param_name = "relative_humidity",
-                                  start_date = paste0(year,"-01-01"),
-                                  end_date = paste0(year,"-12-30"),
-                                  agg_fun = mean,
-                                  shape_obj = cs_inland,
-                                  extra_fields_name = c("STATE","COUNTY",
-                                                        "NAME","FIPS"),
-                                  group_field_name = "FIPS",
-                                  field_na_drop = "STATE",
-                                  agg_field_name = "mean_rmn")
+                            param_name = "relative_humidity",
+                            start_date = paste0(year,"-01-01"),
+                            end_date = paste0(year,"-12-30"),
+                            agg_fun = mean,
+                            shape_obj = cs_inland,
+                            extra_fields_name = c("STATE","COUNTY",
+                                                  "NAME","FIPS"),
+                            group_field_name = "FIPS",
+                            field_na_drop = "STATE",
+                            agg_field_name = "mean_rmn")
 
 rmx <- compile_gridmet_data(nc_path = rmax_path, 
-                                  param_name = "relative_humidity",
-                                  start_date = paste0(year,"-01-01"),
-                                  end_date = paste0(year,"-12-30"),
-                                  agg_fun = mean,
-                                  shape_obj = cs_inland,
-                                  extra_fields_name = c("STATE","COUNTY",
-                                                        "NAME","FIPS"),
-                                  group_field_name = "FIPS",
-                                  field_na_drop = "STATE",
-                                  agg_field_name = "mean_rmx")
+                            param_name = "relative_humidity",
+                            start_date = paste0(year,"-01-01"),
+                            end_date = paste0(year,"-12-30"),
+                            agg_fun = mean,
+                            shape_obj = cs_inland,
+                            extra_fields_name = c("STATE","COUNTY",
+                                                  "NAME","FIPS"),
+                            group_field_name = "FIPS",
+                            field_na_drop = "STATE",
+                            agg_field_name = "mean_rmx")
 
 sph <- compile_gridmet_data(nc_path = sph_path, 
-                                 param_name = "specific_humidity",
-                                 start_date = paste0(year,"-01-01"),
-                                 end_date = paste0(year,"-12-30"),
-                                 agg_fun = mean,
-                                 shape_obj = cs_inland,
-                                 extra_fields_name = c("STATE","COUNTY",
-                                                       "NAME","FIPS"),
-                                 group_field_name = "FIPS",
-                                 field_na_drop = "STATE",
-                                 agg_field_name = "mean_sph")
+                            param_name = "specific_humidity",
+                            start_date = paste0(year,"-01-01"),
+                            end_date = paste0(year,"-12-30"),
+                            agg_fun = mean,
+                            shape_obj = cs_inland,
+                            extra_fields_name = c("STATE","COUNTY",
+                                                  "NAME","FIPS"),
+                            group_field_name = "FIPS",
+                            field_na_drop = "STATE",
+                            agg_field_name = "mean_sph")
 
 ## Merge data
-
-#library(dplyr)
-
 multi_merge <- function(x, y){
-  df <- full_join(x, y, by= "FIPS")
+  df <- left_join(x, y, by= "FIPS")
   return(df)
 }
 
@@ -348,25 +427,97 @@ df_gridmet <- Reduce(multi_merge, list(tmmn,
                                        rmn,
                                        rmx,
                                        sph))
+```
+
+There are `r nrow(df_gridmet)` counties with GridMET data. Number of missing counties: `r nrow(cs_inland_val) - nrow(df_gridmet)` counties. 
+
+### Missing Values
+
+If we aggregate data and take a look at the difference between GridMET data and Initial Counties:
+
+```{r, cache=TRUE}
+df_gridmet$STATE <- substr(df_gridmet$FIPS, 1, 2)
+df_gridmet$COUNTY <- substr(df_gridmet$FIPS, 3, 5)
+
+county_per_state_gridmet <- df_gridmet %>%
+                            group_by(STATE) %>% count()
+
+setdiff(county_per_state_gridmet, state_county)
+```
+
+According to the results, number of counties for state of Virginia (`FIPS = 51`) is different with original shape files. 
+
+Number of counties for state of Virginia: `r state_county[state_county$STATE == 51, c("n")][[1]]`    
+Number of counties for state of Virginia in the GridMET data: `r county_per_state_gridmet[county_per_state_gridmet$STATE == 51, c("n")][[1]]`   
+
+Let's print out the counties that are not in the GridMET data.
+
+```{r, cache=TRUE}
+gr_missing_counties <- setdiff(cs_inland_val$COUNTY, df_gridmet$COUNTY)
+cs_inland_val[cs_inland_val$STATE == 51 & cs_inland_val$COUNTY %in% gr_missing_counties, ]
+```
+
+We can take a look at these counties on the map:
+
+```{r, cache=TRUE}
+vr_inland <- cs_inland[cs_inland$STATE==51,]
+vr_inland$missing <- ifelse(vr_inland$COUNTY %in% gr_missing_counties, 1, 0)
+vr_inland$missing <- as.factor(vr_inland$missing)
+spplot(vr_inland, zcol = "missing",
+       col.regions=c("snow","red"),
+       col = "grey61",
+       xlab="Longitude", ylab="Latitude",
+       main="Counties in the State of Virginia with Missing GridMET Values")
+```
+
+As one can see, it seems there are counties inside other counties, and because of small sizes none of the GridMET grid points was located inside those counties. With further research, we learn that these are independent cities located in the [Commonwealth of Virginia](https://en.wikipedia.org/wiki/List_of_cities_and_counties_in_Virginia).  For the purpose of this report we assign the surrounding counties values for this counties. 
+
+- Covington (580) --> Alleghany (005)   
+- Lexington (678) --> Rockbridge (163)   
+- Falls Church (610) --> Fairfax (059)   
+- Bedford (515) --> Bedford (019)    
+
+```{r, cache=TRUE}
+
+assign_data <- function(data, from_fips, to_fips){
+  tmp <- data[data$FIPS == from_fips,]
+  tmp$FIPS <- to_fips
+  tmp$STATE <- substr(to_fips, 1, 2)
+  tmp$COUNTY <- substr(to_fips, 3, 5)
+  return(tmp)
+}
+
+gridmet_data <- rbind(df_gridmet,
+                      assign_data(df_gridmet, 51005, 51580),
+                      assign_data(df_gridmet, 51163, 51678),
+                      assign_data(df_gridmet, 51059, 51610),
+                      assign_data(df_gridmet, 51019, 51515))
 
 # merge the new values with the shape file.
-merged_obj <- merge(cs_inland, df_gridmet, by=c("FIPS"))
+merged_obj <- merge(cs_inland, gridmet_data, by=c("FIPS"))
 
-spplot(merged_obj, zcol = "mean_tmmx",
-       col.regions=topo.colors(51, rev = FALSE),
-       xlab="Longitude", ylab="Latitude",
-       main="Mean daily maximum temprature in the Contiguous United States (2010)")
 ```
-```{r}
+
+There are `r nrow(gridmet_data)` counties with GridMET data. Number of missing counties: `r nrow(cs_inland_val) - nrow(gridmet_data)` counties.
+
+```{r, cache=TRUE}
 spplot(merged_obj, zcol = "mean_tmmn",
        col.regions=topo.colors(51, rev = FALSE),
        xlab="Longitude", ylab="Latitude",
        main="Mean daily minimum temprature in the Contiguous United States (2010)")
 ```
 
-### CMS Data 
+```{r, cache=TRUE}
+spplot(merged_obj, zcol = "mean_tmmx",
+       col.regions=topo.colors(51, rev = FALSE),
+       xlab="Longitude", ylab="Latitude",
+       main="Mean daily maximum temprature in the Contiguous United States (2010)")
+```
 
-Centers for Medicare and Medicaid Services([CMS](https://www.cms.gov/Research-Statistics-Data-and-Systems/Downloadable-Public-Use-Files/SynPUFs/DE_Syn_PUF)) provides synthetic data at the county level for 2008-2010. CMS data comes in SSA code that is different than FIPS code. We use [SSA to Federal Information Processing Series (FIPS) State and County Crosswalk](https://www.nber.org/research/data/ssa-federal-information-processing-series-fips-state-and-county-crosswalk) file to convert SSA code to FIPS code.
+
+## CMS Data 
+
+Centers for Medicare and Medicaid Services([CMS](https://www.cms.gov/Research-Statistics-Data-and-Systems/Downloadable-Public-Use-Files/SynPUFs/DE_Syn_PUF)) provides synthetic data at the county level for 2008-2010 (@cms). CMS data comes in SSA code that is different than FIPS code. We use [SSA to Federal Information Processing Series (FIPS) State and County Crosswalk](https://www.nber.org/research/data/ssa-federal-information-processing-series-fips-state-and-county-crosswalk) file to convert SSA code to FIPS code (@ssa_2_fips).
 
 ```{r, cache=TRUE}
 
@@ -394,29 +545,87 @@ ssa2fips_cross <- ssa2fips_data[, c("SSA","FIPS")]
 cms_2010 <- m_extract_CMS_data(CMS_DATA_DIR, 2010)
 cms_2010_fips <- merge(cms_2010, ssa2fips_cross, by = "SSA")
 agg_data_cms_2010 <- m_aggregate_cms_data(cms_2010_fips)
+
+# select inland data
+agg_data_cms_2010$STATE <- substr(agg_data_cms_2010$FIPS, 1, 2)
+agg_data_cms_2010$COUNTY <- substr(agg_data_cms_2010$FIPS, 3, 5)
+inland_states <- state_county$STATE
+agg_data_cms_2010 <- agg_data_cms_2010[agg_data_cms_2010$STATE %in% inland_states, ]
+
+agg_data_cms_2010 <- agg_data_cms_2010[, !colnames(agg_data_cms_2010) %in% c("STATE","COUNTY")] 
+
+```
+
+There are `r nrow(agg_data_cms_2010)` counties with CMS data. Number of missing counties: `r nrow(cs_inland_val) - nrow(agg_data_cms_2010)` counties.
+
+### Missing Values
+
+The following figure represents counties with missing values.
+
+```{r, cache=TRUE}
+merged_obj <- merge(cs_inland, agg_data_cms_2010, by=c("FIPS"))
+merged_obj$missing <- ifelse(is.na(merged_obj$mrtlty_cms_pct), 1, 0)
+merged_obj$missing <- as.factor(merged_obj$missing)
+
+spplot(merged_obj, zcol = "missing",
+       col.regions=c("snow","red"),
+       col = "grey61",
+       xlab="Longitude", ylab="Latitude",
+       main="Counties with Missing CMS Data")
+
+# Number of missing values by state
+cms_attr <- c("mrtlty_cms_pct", "wht_cms_pct", "blk_cms_pct",
+              "others_cms_pct", "hsp_cms_pct", "fml_cms_pct")
+```
+
+We use median value of state for imputing missing values. 
+
+```{r, cache=TRUE}
+cms_data <- data.frame(merged_obj[, c("STATE","COUNTY", "FIPS", "missing",
+                                         cms_attr)])
+
+for (item in cms_attr){
+cms_data <- cms_data %>% 
+               group_by(STATE) %>% 
+               mutate(new_val=ifelse(is.na(.data[[item]]),
+                      median(.data[[item]], na.rm=TRUE),
+                      .data[[item]]))
+
+cnames <- colnames(cms_data)
+cms_data <- cms_data[ , !(names(cms_data) %in% c(item))]
+colnames(cms_data)[which(cnames=="new_val")-1] <- item
+}
+
+cms_data <- cms_data[, !colnames(cms_data) %in% c("STATE","COUNTY","missing")]
+
+merged_obj <- merge(cs_inland, cms_data, by=c("FIPS"))
+spplot(merged_obj, zcol = "mrtlty_cms_pct",
+       col.regions=heat.colors(51, rev = TRUE),
+       xlab="Longitude", ylab="Latitude",
+       main="Mortality rate in the Contiguous United States (2010)")
+
 ```
 
 
-
-## Join Data
+# Compiling Data
 
 We generated county-level data for each resources for 2010. Now we need to join all data based on FIPS code. 
 
 ```{r, cache=TRUE}
 
-study_dataset <- Reduce(multi_merge, list(aggregated_pm_data_2010,
-                                          census_2010_processed,
-                                          brfss_data_2010,
-                                          df_gridmet,
-                                          agg_data_cms_2010))
+study_dataset <- Reduce(multi_merge, list(pm_data,
+                                          census_data,
+                                          brfss_data,
+                                          gridmet_data,
+                                          cms_data))
 
 ```
 
 Number of data samples: `r nrow(study_dataset)`.    
-Number of missing value per attribute:
+Number of missing value: `r sum(sapply(study_dataset, function(x) sum(is.na(x))))`.
 
 ```{r}
 sapply(study_dataset, function(x) sum(is.na(x)))
 ```
 
-## References
+# References

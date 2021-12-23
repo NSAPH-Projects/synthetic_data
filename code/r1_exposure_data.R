@@ -26,25 +26,13 @@ m_map_point_shape <- memoise(map_point_shape, cache = cd)
 
 # Create file path for each rds file and read data.
 
-fpath_2008 <- file.path(get_options("input_dir"),"public/Di_2019","2008.rds")
-fpath_2009 <- file.path(get_options("input_dir"),"public/Di_2019","2009.rds")
 fpath_2010 <- file.path(get_options("input_dir"),"public/Di_2019","2010.rds")
 usgpath <- file.path(get_options("input_dir"),"public/Di_2019","USGridSite.rds")
 
-di_pm25_2008 <- readRDS(fpath_2008)
-di_pm25_2009 <- readRDS(fpath_2009)
 di_pm25_2010 <- readRDS(fpath_2010)
 us_grid <- readRDS(usgpath)
 
 # Match exposure to the site code
-
-pm25_2008 <- m_match_exposure_to_sitecode(site_code = us_grid,
-                                          exp_data = di_pm25_2008,
-                                          exp_name = "pm25")
-
-pm25_2009 <- m_match_exposure_to_sitecode(site_code = us_grid,
-                                          exp_data = di_pm25_2009,
-                                          exp_name = "pm25")
 
 pm25_2010 <- m_match_exposure_to_sitecode(site_code = us_grid,
                                           exp_data = di_pm25_2010,
@@ -73,29 +61,17 @@ cs_inland <- county_shape_file[!county_shape_file$STATE %in% non_c_states, ]
 # Generate FIPS code
 cs_inland$FIPS <- paste(cs_inland$STATE,cs_inland$COUNTY,sep = "")
 
-# Convert pm2.5 data frame to SpatialPoints data frame
 
-coordinates(pm25_2008) <- ~Lon+Lat
-coordinates(pm25_2009) <- ~Lon+Lat
+# Number of counties per state
+
+county_per_state <- data.frame(cs_inland[, c("STATE","COUNTY", "NAME","FIPS")]) %>%
+                               group_by(STATE) %>% count()   
+
+
+# Convert pm2.5 data frame to SpatialPoints data frame
 coordinates(pm25_2010) <- ~Lon+Lat
 
 # Join points with polygons
-cs_inland_pm_2008 <- m_map_point_shape(shape_object = cs_inland, 
-                                       point_object = pm25_2008, 
-                                       value_name = "pm25",
-                                       extra_fields_name = c("STATE","COUNTY",
-                                                              "NAME","FIPS"), 
-                                       group_field_name = "FIPS",
-                                       field_na_drop = "STATE")
-
-cs_inland_pm_2009 <- m_map_point_shape(shape_object = cs_inland, 
-                                       point_object = pm25_2009, 
-                                       value_name = "pm25",
-                                       extra_fields_name = c("STATE","COUNTY",
-                                                             "NAME","FIPS"), 
-                                       group_field_name = "FIPS",
-                                       field_na_drop = "STATE")
-
 cs_inland_pm_2010 <- m_map_point_shape(shape_object = cs_inland, 
                                        point_object = pm25_2010, 
                                        value_name = "pm25",
@@ -105,30 +81,19 @@ cs_inland_pm_2010 <- m_map_point_shape(shape_object = cs_inland,
                                        field_na_drop = "STATE")
 
 # Aggregate data for FIPS code level
-
-aggregated_pm_data_2008 <- cs_inland_pm_2008 %>%
-  group_by(FIPS) %>%
-  summarise(mean_pm25 = mean(pm25))
-
-aggregated_pm_data_2009 <- cs_inland_pm_2009 %>%
-  group_by(FIPS) %>%
-  summarise(mean_pm25 = mean(pm25))
-
 aggregated_pm_data_2010 <- cs_inland_pm_2010 %>%
   group_by(FIPS) %>%
   summarise(mean_pm25 = mean(pm25))
 
+
+aggregated_pm_data_2010_cp <- aggregated_pm_data_2010
+
+# For all provided shape files, mean PM2.5 has been assigned. 
+
+
 # Write the results into file
-write.csv(aggregated_pm_data_2008,
-          file.path(pr_results, "aggregated_pm_data_2008.csv"),
-          row.names = FALSE)
-
-write.csv(aggregated_pm_data_2009,
-          file.path(pr_results, "aggregated_pm_data_2009.csv"),
-          row.names = FALSE)
-
 write.csv(aggregated_pm_data_2010,
-          file.path(pr_results, "aggregated_pm_data_2010.csv"),
+          file.path(pr_results, "pm_data_2010.csv"),
           row.names = FALSE)
 
 # Step 10: Take a look at data

@@ -3,19 +3,19 @@
 library(tidyverse)
 
 ## Load exposure
-pm_data_2010 <- read.csv(file.path(pr_results, "aggregated_pm_data_2010.csv"))
+pm_data_2010 <- read.csv(file.path(pr_results, "pm_data_2010.csv"))
 
 ## Load gridmet
-gridmet_2010 <- read.csv(file.path(pr_results, "aggregated_gridmet_2010.csv"))
+gridmet_2010 <- read.csv(file.path(pr_results, "gridmet_data_2010.csv"))
 
 ## Load census
-census_2010 <- read.csv(file.path(pr_results, "census_2010.csv"))
+census_2010 <- read.csv(file.path(pr_results, "census_data_2010.csv"))
 
 ## Load CMS 
-cms_2010 <- read.csv(file.path(pr_results, "CMS_2010.csv"))
+cms_2010 <- read.csv(file.path(pr_results, "CMS_data_2010.csv"))
 
 ## Load BRFSS
-brfss_2010 <- read.csv(file.path(pr_results, "aggregated_brfss_data_2010.csv"))
+brfss_2010 <- read.csv(file.path(pr_results, "brfss_data_2010.csv"))
 
 
 ## Merge data
@@ -31,6 +31,6 @@ df_joined <- Reduce(multi_merge, list(pm_data_2010,
                                       brfss_2010))
 
 write.csv(df_joined,
-          file.path(pr_results, "Study_dataset.csv"),
+          file.path(pr_results, "Study_dataset_2010.csv"),
           row.names = FALSE)
 

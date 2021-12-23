@@ -336,6 +336,40 @@ polish_bfrss_vars <- function(brfss_data){
   return(data)
 }
 
+impute_cdc <- function(data, param_list){
+  
+  for (param in param_list){
+    
+    # compute mean and std for each state
+    state_mean_std <- data %>% 
+      group_by(STATE) %>%
+      summarise(mean = mean(.data[[param]], na.rm = TRUE),
+                std = sd(.data[[param]], na.rm = TRUE))
+    
+    # assign a random value to the missing county
+    
+    param_index <- which(colnames(data) == param)
+    
+    for (i in seq(1, nrow(data))){
+      
+      if (is.na(data[i, param_index])){
+        
+        mean_std_val <- state_mean_std[state_mean_std$STATE == data[i, c("STATE")], c("mean", "std")]
+        
+        if (is.na(mean_std_val[2])){
+          data[i, param_index] <- mean_std_val[1]
+        } else {
+          val <- rnorm(1, mean=mean_std_val[1][[1]],
+                       sd = mean_std_val[2][[1]])
+          # If random value is a negative number, use the mean value. 
+          data[i, param_index] <- ifelse(val < 0, mean_std_val[1][[1]], val)
+        }
+      }
+    }
+  }
+  return(data)
+}
+
 ## PM2.5 Functions -------------------------------------------------------------
 
 #' @title
