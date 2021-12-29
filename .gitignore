@@ -1,4 +1,4 @@
 code/.Rhistory
-.DS_Store
+*.DS_Store
 code/synthetic_county_2008_2010_cache/
 code/synthetic_county_2008_2010_files/
