@@ -6,6 +6,8 @@
 # You need to update project_path_info.md file. Then
 # Run: initialize_project.sh
 
+set.seed(1274)
+
 # Setup up folders' path
 source("setup_env_vals.R")
 

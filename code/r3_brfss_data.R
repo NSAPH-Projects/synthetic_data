@@ -36,20 +36,21 @@ brfss_data_2010 <- polish_bfrss_vars(brfss_2010_subset)
 
 # merge the new values with the shape file.
 merged_obj <- merge(cs_inland, brfss_data_2010, by=c("FIPS"))
-merged_obj$missing <- ifelse(is.na(merged_obj$mean_bmi), 1, 0)
+merged_obj$missing <- ifelse(is.na(merged_obj$cdc_mean_bmi), 1, 0)
 merged_obj$missing <- as.factor(merged_obj$missing)
 
 brfss_data_2010_merged <- data.frame(
-           merged_obj[, c("FIPS", "STATE", "COUNTY", "mean_bmi", "pct_cusmoker", 
-                          "pct_sdsmoker", "pct_fmsmoker", "pct_nvsmoker", 
-                          "pct_nnsmoker")])
+           merged_obj[, c("FIPS", "STATE", "COUNTY", "cdc_mean_bmi",
+                          "cdc_pct_cusmoker", "cdc_pct_sdsmoker", 
+                          "cdc_pct_fmsmoker", "cdc_pct_nvsmoker", 
+                          "cdc_pct_nnsmoker")])
 
 brfss_data_2010_merged <- impute_cdc(
   data = brfss_data_2010_merged,
-  param_list = c("mean_bmi", "pct_cusmoker", 
-                 "pct_sdsmoker","pct_fmsmoker",
-                 "pct_nvsmoker",
-                 "pct_nnsmoker"))
+  param_list = c("cdc_mean_bmi", "cdc_pct_cusmoker", 
+                 "cdc_pct_sdsmoker","cdc_pct_fmsmoker",
+                 "cdc_pct_nvsmoker",
+                 "cdc_pct_nnsmoker"))
 
 brfss_data_2010_merged <- brfss_data_2010_merged[, !colnames(brfss_data_2010_merged) %in% c("STATE", "COUNTY")]
 
@@ -66,7 +67,7 @@ spplot(merged_obj, zcol = "missing",
 
 # Plot of current smokers
 merged_obj <- merge(cs_inland, brfss_data_2010_merged, by=c("FIPS"))
-spplot(merged_obj, zcol = "pct_cusmoker",
+spplot(merged_obj, zcol = "cdc_pct_cusmoker",
        col.regions=heat.colors(51, rev = TRUE),
        xlab="Longitude", ylab="Latitude",
        main="Percentage of Current Smokers in the Contiguous United States (2010)")

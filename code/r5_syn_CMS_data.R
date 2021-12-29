@@ -65,12 +65,12 @@ agg_data_cms_2010 <- agg_data_cms_2010[, !colnames(agg_data_cms_2010) %in%
                                          c("STATE", "COUNTY")]
 
 merged_obj <- merge(cs_inland, agg_data_cms_2010, by=c("FIPS"))
-merged_obj$missing <- ifelse(is.na(merged_obj$mrtlty_cms_pct), 1, 0)
+merged_obj$missing <- ifelse(is.na(merged_obj$cms_mortality_pct), 1, 0)
 merged_obj$missing <- as.factor(merged_obj$missing)
 
 # Imputing missing data 
-cms_attr <- c("mrtlty_cms_pct", "wht_cms_pct", "blk_cms_pct",
-              "others_cms_pct", "hsp_cms_pct", "fml_cms_pct")
+cms_attr <- c("cms_mortality_pct", "cms_white_pct", "cms_black_pct",
+              "cms_others_pct", "cms_hispanic_pct", "cms_female_pct")
 
 cms_obj_val <- data.frame(merged_obj[, c("FIPS","STATE","COUNTY","missing",
                                          cms_attr)])

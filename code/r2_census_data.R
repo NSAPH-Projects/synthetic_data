@@ -52,16 +52,16 @@ sapply(census_2010_e_inland, function(x) sum(is.na(x)))
 
 # add new variables
 census_2010_e_m <- census_2010_e_inland %>%
-                   add_column(poverty = .$B17001_002E/.$B17001_001E,
-                              pct_hispanic = .$B03001_003E/.$B03001_001E,
-                              pct_black = .$B02001_003E/.$B02001_001E,
-                              pct_white = .$B02001_002E/.$B02001_001E,
-                              pct_native = .$B02001_004E/.$B02001_001E,
-                              pct_asian = .$B02001_005E/.$B02001_001E,
-                              owner_occ = .$B25003_002E/.$B25003_001E,
-                              median_house_value = .$B25077_001E,
-                              median_household_income = .$B19013_001E,
-                              median_age = .$B01002_001E)
+                   add_column(cs_poverty = .$B17001_002E/.$B17001_001E,
+                              cs_pct_hispanic = .$B03001_003E/.$B03001_001E,
+                              cs_pct_black = .$B02001_003E/.$B02001_001E,
+                              cs_pct_white = .$B02001_002E/.$B02001_001E,
+                              cs_pct_native = .$B02001_004E/.$B02001_001E,
+                              cs_pct_asian = .$B02001_005E/.$B02001_001E,
+                              cs_owner_occ = .$B25003_002E/.$B25003_001E,
+                              cs_median_house_value = .$B25077_001E,
+                              cs_median_household_income = .$B19013_001E,
+                              cs_median_age = .$B01002_001E)
 
 
 # Drop initial columns
@@ -80,7 +80,7 @@ write.csv(census_2010_processed,
 
 
 merged_obj <- merge(cs_inland, census_2010_processed, by=c("FIPS"))
-spplot(merged_obj, zcol = "median_house_value",
+spplot(merged_obj, zcol = "cs_median_house_value",
        col.regions=terrain.colors(51, rev = FALSE),
        xlab="Longitude", ylab="Latitude",
        main="Median House Value in the Contiguous United States (2010)")

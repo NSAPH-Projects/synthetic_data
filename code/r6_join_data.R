@@ -25,10 +25,11 @@ multi_merge <- function(x, y){
 }
 
 df_joined <- Reduce(multi_merge, list(pm_data_2010,
-                                      gridmet_2010,
                                       census_2010,
-                                      cms_2010,
-                                      brfss_2010))
+                                      brfss_2010,
+                                      gridmet_2010,
+                                      cms_2010
+                                      ))
 
 write.csv(df_joined,
           file.path(pr_results, "Study_dataset_2010.csv"),

@@ -230,16 +230,16 @@ census_2010_e_inland <- census_2010_e[census_2010_e$STATE %in% inland_states, ]
 
 # add new variables
 census_2010_e_m <- census_2010_e_inland %>%
-                   add_column(poverty = .$B17001_002E/.$B17001_001E,
-                              pct_hispanic = .$B03001_003E/.$B03001_001E,
-                              pct_black = .$B02001_003E/.$B02001_001E,
-                              pct_white = .$B02001_002E/.$B02001_001E,
-                              pct_native = .$B02001_004E/.$B02001_001E,
-                              pct_asian = .$B02001_005E/.$B02001_001E,
-                              owner_occ = .$B25003_002E/.$B25003_001E,
-                              median_house_value = .$B25077_001E,
-                              median_household_income = .$B19013_001E,
-                              median_age = .$B01002_001E)
+                   add_column(cs_poverty = .$B17001_002E/.$B17001_001E,
+                              cs_pct_hispanic = .$B03001_003E/.$B03001_001E,
+                              cs_pct_black = .$B02001_003E/.$B02001_001E,
+                              cs_pct_white = .$B02001_002E/.$B02001_001E,
+                              cs_pct_native = .$B02001_004E/.$B02001_001E,
+                              cs_pct_asian = .$B02001_005E/.$B02001_001E,
+                              cs_owner_occ = .$B25003_002E/.$B25003_001E,
+                              cs_median_house_value = .$B25077_001E,
+                              cs_median_household_income = .$B19013_001E,
+                              cs_median_age = .$B01002_001E)
 
 # Drop initial columns
 census_data <- census_2010_e_m %>%
@@ -254,7 +254,7 @@ census_data$COUNTY <- NULL
 # merge the new values with the shape file.
 merged_obj <- merge(cs_inland, census_data, by=c("FIPS"))
 
-spplot(merged_obj, zcol = "median_house_value",
+spplot(merged_obj, zcol = "cs_median_house_value",
        col.regions=terrain.colors(51, rev = FALSE),
        xlab="Longitude", ylab="Latitude",
        main="Median House Value in the Contiguous United States (2010)")
@@ -293,7 +293,7 @@ The BRFSS data is a phone survey, as a result, there are many missing values. Fr
 
 ```{r, cache=TRUE}
 merged_obj <- merge(cs_inland, brfss_data_2010, by=c("FIPS"))
-merged_obj$missing <- as.factor(ifelse(is.na(merged_obj$mean_bmi), 1, 0))
+merged_obj$missing <- as.factor(ifelse(is.na(merged_obj$cdc_mean_bmi), 1, 0))
 
 spplot(merged_obj, zcol = "missing",
        col.regions=c("snow","red"),
@@ -306,24 +306,25 @@ spplot(merged_obj, zcol = "missing",
 Discussing methods for imputing missing values is beyond the scope of this report. In this report, we generate a normal distribution of each parameter for each state and choose a value at random for counties with missing values. 
 ```{r, cache=TRUE}
 brfss_data <- data.frame(
-           merged_obj[, c("FIPS", "STATE", "COUNTY", "mean_bmi", "pct_cusmoker", 
-                          "pct_sdsmoker", "pct_fmsmoker", "pct_nvsmoker", 
-                          "pct_nnsmoker")])
+           merged_obj[, c("FIPS", "STATE", "COUNTY", "cdc_mean_bmi", 
+                          "cdc_pct_cusmoker", "cdc_pct_sdsmoker", 
+                          "cdc_pct_fmsmoker", "cdc_pct_nvsmoker", 
+                          "cdc_pct_nnsmoker")])
 
 # 9999 is assigned for those who answered the survey but refused to answer 
 # specific questions, we treat them as missing values
-brfss_data$mean_bmi <- ifelse(brfss_data$mean_bmi == 9999, NA,
-                              brfss_data$mean_bmi)
+brfss_data$cdc_mean_bmi <- ifelse(brfss_data$cdc_mean_bmi == 9999, NA,
+                                  brfss_data$cdc_mean_bmi)
 
 brfss_data <- impute_cdc(
   data = brfss_data,
-  param_list = c("mean_bmi", "pct_cusmoker", 
-                 "pct_sdsmoker","pct_fmsmoker",
-                 "pct_nvsmoker",
-                 "pct_nnsmoker"))
+  param_list = c("cdc_mean_bmi", "cdc_pct_cusmoker", 
+                 "cdc_pct_sdsmoker","cdc_pct_fmsmoker",
+                 "cdc_pct_nvsmoker",
+                 "cdc_pct_nnsmoker"))
 
 merged_obj <- merge(cs_inland, brfss_data, by=c("FIPS"))
-spplot(merged_obj, zcol = "mean_bmi",
+spplot(merged_obj, zcol = "cdc_mean_bmi",
        col.regions=heat.colors(51, rev = TRUE),
        xlab="Longitude", ylab="Latitude",
        main="Mean Body Mass Index in the Contiguous United States (2010)")
@@ -427,6 +428,9 @@ df_gridmet <- Reduce(multi_merge, list(tmmn,
                                        rmn,
                                        rmx,
                                        sph))
+
+cn <- colnames(df_gridmet)
+colnames(df_gridmet) <- c(cn[1], paste("gmet_", cn[2:6], sep = ""))
 ```
 
 There are `r nrow(df_gridmet)` counties with GridMET data. Number of missing counties: `r nrow(cs_inland_val) - nrow(df_gridmet)` counties. 
@@ -493,6 +497,8 @@ gridmet_data <- rbind(df_gridmet,
                       assign_data(df_gridmet, 51059, 51610),
                       assign_data(df_gridmet, 51019, 51515))
 
+gridmet_data <- gridmet_data[, !colnames(gridmet_data) %in% c("STATE","COUNTY")]
+
 # merge the new values with the shape file.
 merged_obj <- merge(cs_inland, gridmet_data, by=c("FIPS"))
 
@@ -501,14 +507,14 @@ merged_obj <- merge(cs_inland, gridmet_data, by=c("FIPS"))
 There are `r nrow(gridmet_data)` counties with GridMET data. Number of missing counties: `r nrow(cs_inland_val) - nrow(gridmet_data)` counties.
 
 ```{r, cache=TRUE}
-spplot(merged_obj, zcol = "mean_tmmn",
+spplot(merged_obj, zcol = "gmet_mean_tmmn",
        col.regions=topo.colors(51, rev = FALSE),
        xlab="Longitude", ylab="Latitude",
        main="Mean daily minimum temprature in the Contiguous United States (2010)")
 ```
 
 ```{r, cache=TRUE}
-spplot(merged_obj, zcol = "mean_tmmx",
+spplot(merged_obj, zcol = "gmet_mean_tmmx",
        col.regions=topo.colors(51, rev = FALSE),
        xlab="Longitude", ylab="Latitude",
        main="Mean daily maximum temprature in the Contiguous United States (2010)")
@@ -564,7 +570,7 @@ The following figure represents counties with missing values.
 
 ```{r, cache=TRUE}
 merged_obj <- merge(cs_inland, agg_data_cms_2010, by=c("FIPS"))
-merged_obj$missing <- ifelse(is.na(merged_obj$mrtlty_cms_pct), 1, 0)
+merged_obj$missing <- ifelse(is.na(merged_obj$cms_mortality_pct), 1, 0)
 merged_obj$missing <- as.factor(merged_obj$missing)
 
 spplot(merged_obj, zcol = "missing",
@@ -574,8 +580,8 @@ spplot(merged_obj, zcol = "missing",
        main="Counties with Missing CMS Data")
 
 # Number of missing values by state
-cms_attr <- c("mrtlty_cms_pct", "wht_cms_pct", "blk_cms_pct",
-              "others_cms_pct", "hsp_cms_pct", "fml_cms_pct")
+cms_attr <- c("cms_mortality_pct", "cms_white_pct", "cms_black_pct",
+              "cms_others_pct", "cms_hispanic_pct", "cms_female_pct")
 ```
 
 We use median value of state for imputing missing values. 
@@ -599,7 +605,7 @@ colnames(cms_data)[which(cnames=="new_val")-1] <- item
 cms_data <- cms_data[, !colnames(cms_data) %in% c("STATE","COUNTY","missing")]
 
 merged_obj <- merge(cs_inland, cms_data, by=c("FIPS"))
-spplot(merged_obj, zcol = "mrtlty_cms_pct",
+spplot(merged_obj, zcol = "cms_mortality_pct",
        col.regions=heat.colors(51, rev = TRUE),
        xlab="Longitude", ylab="Latitude",
        main="Mortality rate in the Contiguous United States (2010)")

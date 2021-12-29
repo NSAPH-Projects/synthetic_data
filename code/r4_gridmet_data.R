@@ -126,6 +126,8 @@ df_gridmet<- rbind(df_gridmet,
                    assign_data(df_gridmet, 51059, 51610),
                    assign_data(df_gridmet, 51019, 51515))
 
+cn <- colnames(df_gridmet)
+colnames(df_gridmet) <- c(cn[1], paste("gmet_", cn[2:6], sep = ""))
 return(df_gridmet)
 }
 
@@ -144,7 +146,7 @@ write.csv(data_2010,
 # merge the new values with the shape file.
 merged_obj <- merge(cs_inland, data_2010, by=c("FIPS"))
 
-spplot(merged_obj, zcol = "mean_tmmx",
+spplot(merged_obj, zcol = "gmet_mean_tmmx",
        col.regions=topo.colors(51, rev = FALSE),
        xlab="Longitude", ylab="Latitude",
        main="Mean daily maximum temprature in the Contiguous United States (2010)")

@@ -83,7 +83,7 @@ cs_inland_pm_2010 <- m_map_point_shape(shape_object = cs_inland,
 # Aggregate data for FIPS code level
 aggregated_pm_data_2010 <- cs_inland_pm_2010 %>%
   group_by(FIPS) %>%
-  summarise(mean_pm25 = mean(pm25))
+  summarise(qd_mean_pm25 = mean(pm25))
 
 
 aggregated_pm_data_2010_cp <- aggregated_pm_data_2010
@@ -101,7 +101,7 @@ write.csv(aggregated_pm_data_2010,
 merged_obj <- merge(cs_inland, aggregated_pm_data_2010, by=c("FIPS"))
 
 
-spplot(merged_obj, zcol = "mean_pm25",
+spplot(merged_obj, zcol = "qd_mean_pm25",
        col.regions=heat.colors(51, rev = TRUE),
        xlab="Longitude", ylab="Latitude",
        main="Mean PM2.5 in the Contiguous United States (2010)")

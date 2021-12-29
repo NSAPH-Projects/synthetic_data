@@ -267,12 +267,12 @@ aggregate_cms_data <- function(cms_data_fips){
   
   agg_data <- cms_data_fips %>%
     group_by(year, FIPS) %>%
-    summarise(mrtlty_cms_pct = sum(dead)/length(dead),
-              wht_cms_pct = sum(race_white)/length(race_white),
-              blk_cms_pct = sum(race_black)/length(race_black),
-              others_cms_pct = sum(race_others)/length(race_others),
-              hsp_cms_pct = sum(race_hispanic)/length(race_hispanic),
-              fml_cms_pct = sum(sex_female)/length(sex_female))
+    summarise(cms_mortality_pct = sum(dead)/length(dead),
+              cms_white_pct = sum(race_white)/length(race_white),
+              cms_black_pct = sum(race_black)/length(race_black),
+              cms_others_pct = sum(race_others)/length(race_others),
+              cms_hispanic_pct = sum(race_hispanic)/length(race_hispanic),
+              cms_female_pct = sum(sex_female)/length(sex_female))
   
   return(agg_data)
 }
@@ -310,7 +310,7 @@ polish_bfrss_vars <- function(brfss_data){
   
   agg_data <- data_dummy %>%
     group_by(FIPS) %>%
-    summarise(mean_bmi = mean(bmi), 
+    summarise(cdc_mean_bmi = mean(bmi), 
               count_cusmoker = sum(current_smoker),
               count_sdsmoker = sum(somedays_smoker),
               count_fmsmoker = sum(former_smoker),
@@ -322,16 +322,16 @@ polish_bfrss_vars <- function(brfss_data){
   
   agg_data_pct <- agg_data %>%
     add_column(
-      pct_cusmoker = .$count_cusmoker / .$count_tlsmoker,
-      pct_sdsmoker = .$count_sdsmoker / .$count_tlsmoker,
-      pct_fmsmoker = .$count_fmsmoker / .$count_tlsmoker,
-      pct_nvsmoker = .$count_nvsmoker / .$count_tlsmoker,
-      pct_nnsmoker = .$count_nnsmoker / .$count_tlsmoker,
+      cdc_pct_cusmoker = .$count_cusmoker / .$count_tlsmoker,
+      cdc_pct_sdsmoker = .$count_sdsmoker / .$count_tlsmoker,
+      cdc_pct_fmsmoker = .$count_fmsmoker / .$count_tlsmoker,
+      cdc_pct_nvsmoker = .$count_nvsmoker / .$count_tlsmoker,
+      cdc_pct_nnsmoker = .$count_nnsmoker / .$count_tlsmoker,
     )
   
-  data <- agg_data_pct[, c("FIPS", "mean_bmi", "pct_cusmoker",
-                           "pct_sdsmoker", "pct_fmsmoker", "pct_nvsmoker",
-                           "pct_nnsmoker")]
+  data <- agg_data_pct[, c("FIPS", "cdc_mean_bmi", "cdc_pct_cusmoker",
+                           "cdc_pct_sdsmoker", "cdc_pct_fmsmoker",
+                           "cdc_pct_nvsmoker", "cdc_pct_nnsmoker")]
   
   return(data)
 }
