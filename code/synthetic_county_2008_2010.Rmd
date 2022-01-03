@@ -678,7 +678,7 @@ spplot(merged_obj, zcol = "cms_mortality_pct",
 ```
 
 
-# Compiling Data
+# Compile Data
 
 We generated county-level data for each resources for 2010. Now we need to join all data based on FIPS code. 
 
@@ -698,5 +698,44 @@ Number of missing value: `r sum(sapply(study_dataset, function(x) sum(is.na(x)))
 ```{r}
 sapply(study_dataset, function(x) sum(is.na(x)))
 ```
+
+## Add Regions
+
+We also categorize the states into four different regions:
+
+- North East
+- South
+- Midwest
+- West
+
+```{r, cache=TRUE}
+
+state_fips <- state_fips[, !colnames(state_fips) %in% c("FIPS","NAME")]
+state_fips <- rename(state_fips, STATE_CODE = POSTAL.CODE)
+setDT(state_fips)
+
+# define regions
+NORTHEAST=c("NY","MA","PA","RI","NH","ME","VT","CT","NJ")  
+SOUTH=c("DC","VA","NC","WV","KY","SC","GA","FL","AL","TN","MS","AR","MD","DE",
+        "OK","TX","LA")
+MIDWEST=c("OH","IN","MI","IA","MO","WI","MN","SD","ND","IL","KS","NE")
+WEST=c("MT","CO","WY","ID","UT","NV","CA","OR","WA","AZ","NM")
+
+state_fips[STATE_CODE %in% NORTHEAST, region := "NORTHEAST"]
+state_fips[STATE_CODE %in% SOUTH, region := "SOUTH"]
+state_fips[STATE_CODE %in% MIDWEST, region := "MIDWEST"]
+state_fips[STATE_CODE %in% WEST, region := "WEST"]
+
+study_dataset <- full_join(study_dataset, state_fips, by="STATE")
+
+merged_obj <- merge(cs_inland, study_dataset, by=c("FIPS"))
+merged_obj$region <- as.factor(merged_obj$region)
+spplot(merged_obj, zcol = "region",
+       col.regions=c("lightgoldenrodyellow","lightcoral", "yellowgreen",
+                     "lavender"),
+       xlab="Longitude", ylab="Latitude",
+       main="Study Regions")
+```
+
 
 # References

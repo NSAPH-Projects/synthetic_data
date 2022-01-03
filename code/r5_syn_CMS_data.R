@@ -36,7 +36,7 @@ ssa2fips_data$SSA <- sprintf("%05d", ssa2fips_data$ssacounty)
 ssa2fips_cross <- ssa2fips_data[, c("SSA","FIPS")]
 
 
-cms_2010 <- m_extract_CMS_data(CMS_DATA_DIR, 2010)
+cms_2010 <- m_extract_CMS_data(CMS_DATA_DIR, 2010, ssa2fips_cross)
 
 
 cms_2010_fips <- merge(cms_2010, ssa2fips_cross, by = "SSA")
