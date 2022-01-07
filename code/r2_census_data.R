@@ -1,6 +1,6 @@
 ##       author: Naeem Khoshnevis
 ##      created: December 2021
-##      purpose: Downloading Census Data 
+##      purpose: Downloading Census Data
 
 
 
@@ -33,15 +33,16 @@ census_vars = c("B01001_020", "B01001_021", "B01001_022", "B01001_023",
                 "B15001_035", "B15001_036", "B15001_037",
                 "B15001_076", "B15001_077", "B15001_078",
                 "B19049_005",
-                "B25077_001")
+                "B25077_001",
+                "B01003_001")
 
-census_2010 <- get_acs(geography = "county", 
+census_2010 <- get_acs(geography = "county",
                        variables = census_vars,
                        year = 2010,
                        survey = "acs5",
                        output = "wide")
 
-# Drop Margin of error column. 
+# Drop Margin of error column.
 census_2010_e <- census_2010 %>% select(-ends_with("M"))
 census_2010_e$STATE <- substr(census_2010_e$GEOID, 1, 2)
 census_2010_e$COUNTY <- substr(census_2010_e$GEOID, 3, 5)
@@ -69,31 +70,40 @@ census_2010_e_m <- census_2010_e_m %>%
                                              .$B01001I_016E + .$B01001I_029E +
                                              .$B01001I_030E + .$B01001I_031E)/
                                             (.$tmp_total_pop),
-                              cs_black = (.$B01001B_014E + .$B01001B_015E + 
-                                          .$B01001B_016E + .$B01001B_029E + 
+                              cs_black = (.$B01001B_014E + .$B01001B_015E +
+                                          .$B01001B_016E + .$B01001B_029E +
                                           .$B01001B_030E + .$B01001B_031E)/
                                          (.$tmp_total_pop),
-                              cs_white = (.$B01001H_014E + .$B01001H_015E + 
-                                          .$B01001H_016E + .$B01001H_029E + 
+                              cs_white = (.$B01001H_014E + .$B01001H_015E +
+                                          .$B01001H_016E + .$B01001H_029E +
                                           .$B01001H_030E + .$B01001H_031E)/
                                          (.$tmp_total_pop),
                               cs_native = (.$B01001C_014E + .$B01001C_015E +
-                                           .$B01001C_016E + .$B01001C_029E + 
+                                           .$B01001C_016E + .$B01001C_029E +
                                            .$B01001C_030E + .$B01001C_031E)/
                                          (.$tmp_total_pop),
-                              cs_asian = (.$B01001D_014E + .$B01001D_015E + 
-                                          .$B01001D_016E + .$B01001D_029E + 
+                              cs_asian = (.$B01001D_014E + .$B01001D_015E +
+                                          .$B01001D_016E + .$B01001D_029E +
                                           .$B01001D_030E + .$B01001D_031E)/
                                          (.$tmp_total_pop),
                               cs_ed_below_highschool = (
                                 .$B15001_036E + .$B15001_037E +
-                                .$B15001_077E + .$B15001_078E)/ 
+                                .$B15001_077E + .$B15001_078E)/
                                 (.$B15001_035E + .$B15001_076E),
                               cs_household_income = .$B19049_005E,
-                              cs_median_house_value = .$B25077_001E
+                              cs_median_house_value = .$B25077_001E,
+                              cs_total_population = .$B01003_001E
 )
 
-# One county is missing data (FIPS: 48301). 
+## Extract area of each county
+tmp_census <- census_2010_e_m
+colnames(tmp_census)[which(names(tmp_census) == "GEOID")] <- "FIPS"
+tmp_obj <- merge(cs_inland, tmp_census, by=c("FIPS"))
+fips_area <- data.frame(tmp_obj[, c("FIPS","CENSUSAREA")])
+tmp_census <- tmp_obj <- NULL
+colnames(fips_area)[which(names(fips_area) == "CENSUSAREA")] <- "cs_area"
+
+# One county is missing data (FIPS: 48301).
 census_2010_e_m <- census_2010_e_m %>%
  mutate_all(~replace(., is.na(.), 0))
 
@@ -113,17 +123,22 @@ colnames(census_2010_processed)[which(names(census_2010_processed) == "GEOID")] 
 census_2010_processed$STATE <- NULL
 census_2010_processed$COUNTY <- NULL
 
+# Adding area of county to the data.
+census_2010_processed <- merge(census_2010_processed, fips_area, by="FIPS")
+
+
 # Assigning average of four surrounding counties:
 compute_cols <- c("cs_poverty", "cs_hispanic", "cs_black",
                   "cs_white",
                   "cs_native", "cs_asian",
                   "cs_household_income",
-                  "cs_other", "cs_ed_below_highschool")
+                  "cs_other", "cs_ed_below_highschool", "cs_total_population")
 tmp_four <- census_2010_processed[census_2010_processed$FIPS %in% c("48495",
                                                                     "48475",
                                                                     "48389",
                                                                     "35025"),
                                   compute_cols]
+
 
 tmp_mean <- colMeans(tmp_four)
 tmp_mean[["cs_household_income"]] <- floor(tmp_mean[["cs_household_income"]])
@@ -131,6 +146,12 @@ tmp_mean[["cs_household_income"]] <- floor(tmp_mean[["cs_household_income"]])
 for (item in compute_cols){
   census_2010_processed[census_2010_processed$FIPS=="48301", item] <- getElement(tmp_mean, item)
 }
+
+# compute population density
+# https://www.socialexplorer.com/data/C2000/metadata/?ds=SE&var=T003_001
+census_2010_processed["cs_population_density"] <- (
+  census_2010_processed$cs_total_population/census_2010_processed$cs_area)
+
 
 write.csv(census_2010_processed,
           file.path(pr_results, "census_data_2010.csv"),

@@ -200,7 +200,8 @@ census_vars = c("B01001_020", "B01001_021", "B01001_022", "B01001_023",
                 "B15001_035", "B15001_036", "B15001_037",
                 "B15001_076", "B15001_077", "B15001_078",
                 "B19049_005",
-                "B25077_001")
+                "B25077_001",
+                "B01003_001")
 
 v10 <- load_variables(2010, "acs5", cache = TRUE)
 var_table <- v10[v10$name %in% census_vars,]
@@ -265,8 +266,17 @@ census_2010_e_m <- census_2010_e_m %>%
                                 .$B15001_077E + .$B15001_078E)/ 
                                 (.$B15001_035E + .$B15001_076E),
                               cs_household_income = .$B19049_005E,
-                              cs_median_house_value = .$B25077_001E
+                              cs_median_house_value = .$B25077_001E,
+                              cs_total_population = .$B01003_001E
 )
+
+## Extract area of each county
+tmp_census <- census_2010_e_m
+colnames(tmp_census)[which(names(tmp_census) == "GEOID")] <- "FIPS"
+tmp_obj <- merge(cs_inland, tmp_census, by=c("FIPS"))
+fips_area <- data.frame(tmp_obj[, c("FIPS","CENSUSAREA")])
+tmp_census <- tmp_obj <- NULL
+colnames(fips_area)[which(names(fips_area) == "CENSUSAREA")] <- "cs_area"
 
 # One county is missing data (FIPS: 48301). 
 census_2010_e_m <- census_2010_e_m %>%
@@ -288,6 +298,9 @@ colnames(census_2010_processed)[which(names(census_2010_processed) == "GEOID")] 
 census_2010_processed$STATE <- NULL
 census_2010_processed$COUNTY <- NULL
 
+# Adding area of county to the data.
+census_2010_processed <- merge(census_2010_processed, fips_area, by="FIPS")
+
 census_2010_processed[census_2010_processed$FIPS == "48301",]
 ```
 There is a problem with Loving County data in Texas. We use average of surrounding counties to impute missing values. 
@@ -300,6 +313,7 @@ compute_cols <- c("cs_poverty", "cs_hispanic", "cs_black",
                   "cs_native", "cs_asian",
                   "cs_household_income",
                   "cs_other", "cs_ed_below_highschool")
+
 tmp_four <- census_2010_processed[census_2010_processed$FIPS %in% c("48495",
                                                                     "48475",
                                                                     "48389",
@@ -313,6 +327,14 @@ for (item in compute_cols){
   census_2010_processed[census_2010_processed$FIPS=="48301", item] <- getElement(tmp_mean, item)
 }
 
+# compute population density
+# https://www.socialexplorer.com/data/C2000/metadata/?ds=SE&var=T003_001
+census_2010_processed["cs_population_density"] <- (
+  census_2010_processed$cs_total_population/census_2010_processed$cs_area)
+
+census_2010_processed["cs_log_population_density"] <- log10(census_2010_processed["cs_population_density"])
+census_2010_processed["cs_log_total_population"] <- log10(census_2010_processed["cs_total_population"])
+
 census_data <- census_2010_processed
 
 # Take a look at data
@@ -324,6 +346,26 @@ spplot(merged_obj, zcol = "cs_median_house_value",
        xlab="Longitude", ylab="Latitude",
        main="Median House Value in the Contiguous United States (2010)")
 
+```
+```{r, cache=TRUE}
+spplot(merged_obj, zcol = "cs_area",
+       col.regions=terrain.colors(51, rev = FALSE),
+       xlab="Longitude", ylab="Latitude",
+       main="Area of counties in the Contiguous US (2010) - mi^2")
+```
+
+```{r, cache=TRUE}
+spplot(merged_obj, zcol = "cs_log_total_population",
+       col.regions=terrain.colors(51, rev = FALSE),
+       xlab="Longitude", ylab="Latitude",
+       main="Log10 of total population of each counties in the Contiguous US (2010)")
+```
+
+```{r, cache=TRUE}
+spplot(merged_obj, zcol = "cs_log_population_density",
+       col.regions=terrain.colors(51, rev = FALSE),
+       xlab="Longitude", ylab="Latitude",
+       main="Log10 of population density in the Contiguous US (2010)")
 ```
 
 There are `r nrow(census_data)` counties' data in the census data. The following shows the available column names and number of missing data per column in the census data. 
@@ -398,7 +440,12 @@ spplot(merged_obj, zcol = "cdc_mean_bmi",
 
 ## GridMET data 
 
-Climatology Lab at the University of California, Merced, provides the [GridMET](https://www.climatologylab.org/gridmet.html) data (@abatzoglou2013development).  The data set is daily surface meteorological data covering the contiguous United States. This report is interested in average minimum and maximum temperature, average minimum and maximum humidity, and specific humidity. Data comes in NetCDF4 format. We use [ncdf4](https://cran.r-project.org/web/packages/ncdf4/index.html) to load the data (@ncdf). 
+Climatology Lab at the University of California, Merced, provides the [GridMET](https://www.climatologylab.org/gridmet.html) data (@abatzoglou2013development).  The data set is daily surface meteorological data covering the contiguous United States. This report is interested in average annual and seasonal maximum temperature, average annual and seasonal maximum humidity, and annual and seasonal specific humidity. The Winter and Summer time line is according to the following:
+
+- Summer: June 1 - August 31
+- Winter: December 1 - February 28 (Or 29 for Leap years)
+
+Data comes in NetCDF4 format. We use [ncdf4](https://cran.r-project.org/web/packages/ncdf4/index.html) to load the data (@ncdf). 
 
 ```{r, cache=TRUE}
 
@@ -409,30 +456,27 @@ m_map_point_shape <- memoise(map_point_shape, cache = cd)
 year <- 2010
 
 # Temperature 
-tmmn_path <- file.path(get_options("input_dir"), "public/gridmet_data",
-                            paste0("tmmn_",year, ".nc"))
 tmmx_path <- file.path(get_options("input_dir"), "public/gridmet_data",
-                            paste0("tmmx_",year, ".nc"))
+                       paste0("tmmx_",year, ".nc"))
+# Last year (ly)
+tmmx_path_ly <- file.path(get_options("input_dir"),
+                          "public/gridmet_data",
+                          paste0("tmmx_",year-1,".nc"))
 
 # Humidity 
-rmin_path <- file.path(get_options("input_dir"), "public/gridmet_data",
-                            paste0("rmin_",year, ".nc"))
 rmax_path <- file.path(get_options("input_dir"), "public/gridmet_data",
-                            paste0("rmax_",year, ".nc"))
-sph_path <- file.path(get_options("input_dir"), "public/gridmet_data",
-                            paste0("sph_",year,".nc"))
+                       paste0("rmax_",year, ".nc"))
 
-tmmn <- compile_gridmet_data(nc_path = tmmn_path, 
-                             param_name = "air_temperature",
-                             start_date = paste0(year,"-01-01"),
-                             end_date = paste0(year,"-12-30"),
-                             agg_fun = mean,
-                             shape_obj = cs_inland,
-                             extra_fields_name = c("STATE","COUNTY",
-                                                   "NAME","FIPS"),
-                             group_field_name = "FIPS",
-                             field_na_drop = "STATE",
-                             agg_field_name = "mean_tmmn")
+rmax_path_ly <- file.path(get_options("input_dir"),
+                          "public/gridmet_data",
+                          paste0("rmax_",year-1,".nc"))
+
+sph_path <- file.path(get_options("input_dir"), "public/gridmet_data",
+                      paste0("sph_",year,".nc"))
+
+sph_path_ly <- file.path(get_options("input_dir"),
+                         "public/gridmet_data",
+                         paste0("sph_",year-1,".nc"))
 
 tmmx <- compile_gridmet_data(nc_path = tmmx_path, 
                              param_name = "air_temperature",
@@ -446,17 +490,23 @@ tmmx <- compile_gridmet_data(nc_path = tmmx_path,
                              field_na_drop = "STATE",
                              agg_field_name = "mean_tmmx")
 
-rmn <- compile_gridmet_data(nc_path = rmin_path, 
-                            param_name = "relative_humidity",
-                            start_date = paste0(year,"-01-01"),
-                            end_date = paste0(year,"-12-30"),
-                            agg_fun = mean,
-                            shape_obj = cs_inland,
-                            extra_fields_name = c("STATE","COUNTY",
-                                                  "NAME","FIPS"),
-                            group_field_name = "FIPS",
-                            field_na_drop = "STATE",
-                            agg_field_name = "mean_rmn")
+tmmx_summer <- compile_gridmet_data(nc_path = tmmx_path,
+                                    param_name = "air_temperature",
+                                    start_date = paste0(year,"-06-01"),
+                                    end_date = paste0(year, "-08-31"),
+                                    agg_fun = mean,
+                                    shape_obj = cs_inland,
+                                    extra_fields_name = c("STATE","COUNTY",
+                                                          "NAME","FIPS"),
+                                    group_field_name = "FIPS",
+                                    field_na_drop = "STATE",
+                                    agg_field_name = "mean_summer_tmmx")
+
+tmmx_winter <- compute_winter(path_cy = tmmx_path,
+                              path_ly = tmmx_path_ly,
+                              year_cy = year,
+                              param_name = "air_temperature",
+                              field_name = "winter_tmmx")
 
 rmx <- compile_gridmet_data(nc_path = rmax_path, 
                             param_name = "relative_humidity",
@@ -470,6 +520,24 @@ rmx <- compile_gridmet_data(nc_path = rmax_path,
                             field_na_drop = "STATE",
                             agg_field_name = "mean_rmx")
 
+rmx_summer <- compile_gridmet_data(nc_path = rmax_path,
+                                   param_name = "relative_humidity",
+                                   start_date = paste0(year,"-06-01"),
+                                   end_date = paste0(year, "-08-31"),
+                                   agg_fun = mean,
+                                   shape_obj = cs_inland,
+                                   extra_fields_name = c("STATE","COUNTY",
+                                                         "NAME","FIPS"),
+                                   group_field_name = "FIPS",
+                                   field_na_drop = "STATE",
+                                   agg_field_name = "mean_summer_rmx")
+
+rmx_winter <- compute_winter(path_cy = rmax_path,
+                             path_ly = rmax_path_ly,
+                             year_cy = year,
+                             param_name = "relative_humidity",
+                             field_name = "winter_rmx")
+
 sph <- compile_gridmet_data(nc_path = sph_path, 
                             param_name = "specific_humidity",
                             start_date = paste0(year,"-01-01"),
@@ -482,20 +550,42 @@ sph <- compile_gridmet_data(nc_path = sph_path,
                             field_na_drop = "STATE",
                             agg_field_name = "mean_sph")
 
+sph_summer <- compile_gridmet_data(nc_path = sph_path,
+                                   param_name = "specific_humidity",
+                                   start_date = paste0(year,"-06-01"),
+                                   end_date = paste0(year, "-08-31"),
+                                   agg_fun = mean,
+                                   shape_obj = cs_inland,
+                                   extra_fields_name = c("STATE","COUNTY",
+                                                         "NAME","FIPS"),
+                                   group_field_name = "FIPS",
+                                   field_na_drop = "STATE",
+                                   agg_field_name = "mean_summer_sph")
+
+sph_winter <- compute_winter(path_cy = sph_path,
+                             path_ly = sph_path_ly,
+                             year_cy = year,
+                             param_name = "specific_humidity",
+                             field_name = "winter_sph")
+
 ## Merge data
 multi_merge <- function(x, y){
   df <- left_join(x, y, by= "FIPS")
   return(df)
 }
 
-df_gridmet <- Reduce(multi_merge, list(tmmn,
-                                       tmmx,
-                                       rmn,
+df_gridmet <- Reduce(multi_merge, list(tmmx,
+                                       tmmx_summer,
+                                       tmmx_winter,
                                        rmx,
-                                       sph))
+                                       rmx_summer,
+                                       rmx_winter,
+                                       sph,
+                                       sph_summer,
+                                       sph_winter))
 
 cn <- colnames(df_gridmet)
-colnames(df_gridmet) <- c(cn[1], paste("gmet_", cn[2:6], sep = ""))
+colnames(df_gridmet) <- c(cn[1], paste("gmet_", cn[2:10], sep = ""))
 ```
 
 There are `r nrow(df_gridmet)` counties with GridMET data. Number of missing counties: `r nrow(cs_inland_val) - nrow(df_gridmet)` counties. 
@@ -572,17 +662,17 @@ merged_obj <- merge(cs_inland, gridmet_data, by=c("FIPS"))
 There are `r nrow(gridmet_data)` counties with GridMET data. Number of missing counties: `r nrow(cs_inland_val) - nrow(gridmet_data)` counties.
 
 ```{r, cache=TRUE}
-spplot(merged_obj, zcol = "gmet_mean_tmmn",
+spplot(merged_obj, zcol = "gmet_mean_winter_tmmx",
        col.regions=topo.colors(51, rev = FALSE),
        xlab="Longitude", ylab="Latitude",
-       main="Mean daily minimum temprature in the Contiguous United States (2010)")
+       main="Mean max temp. during winter in the Contiguous US (2009-10)")
 ```
 
 ```{r, cache=TRUE}
-spplot(merged_obj, zcol = "gmet_mean_tmmx",
+spplot(merged_obj, zcol = "gmet_mean_summer_tmmx",
        col.regions=topo.colors(51, rev = FALSE),
        xlab="Longitude", ylab="Latitude",
-       main="Mean daily maximum temprature in the Contiguous United States (2010)")
+       main="Mean max temp. during summer in the Contiguous US (2010)")
 ```
 
 

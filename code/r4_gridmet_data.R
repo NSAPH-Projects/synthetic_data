@@ -1,6 +1,6 @@
 ##       author: Naeem Khoshnevis
 ##      created: December 2021
-##      purpose: Aggregating gridmet data to county level 
+##      purpose: Aggregating gridmet data to county level
 
 
 # load libraries
@@ -16,7 +16,7 @@ m_map_point_shape <- memoise(map_point_shape, cache = cd)
 
 loop_over_year <- function(year){
 
-# Temrature 
+# Temrature
 tmmn_path <- file.path(get_options("input_dir"),
                             "public/gridmet_data",
                             paste0("tmmn_",year,".nc"))
@@ -24,7 +24,15 @@ tmmx_path <- file.path(get_options("input_dir"),
                             "public/gridmet_data",
                             paste0("tmmx_",year,".nc"))
 
-# Humidity 
+# ly = last year
+tmmn_path_ly <- file.path(get_options("input_dir"),
+                          "public/gridmet_data",
+                          paste0("tmmn_",year-1,".nc"))
+tmmx_path_ly <- file.path(get_options("input_dir"),
+                          "public/gridmet_data",
+                          paste0("tmmx_",year-1,".nc"))
+
+# Humidity
 rmin_path <- file.path(get_options("input_dir"),
                             "public/gridmet_data",
                             paste0("rmin_",year,".nc"))
@@ -34,9 +42,20 @@ rmax_path <- file.path(get_options("input_dir"),
 
 sph_path <- file.path(get_options("input_dir"),
                             "public/gridmet_data",
-                           paste0("sph_",year,".nc"))
+                            paste0("sph_",year,".nc"))
 
-tmmn <- compile_gridmet_data(nc_path = tmmn_path, 
+rmin_path_ly <- file.path(get_options("input_dir"),
+                           "public/gridmet_data",
+                           paste0("rmin_",year-1,".nc"))
+rmax_path_ly <- file.path(get_options("input_dir"),
+                           "public/gridmet_data",
+                           paste0("rmax_",year-1,".nc"))
+
+sph_path_ly <- file.path(get_options("input_dir"),
+                           "public/gridmet_data",
+                           paste0("sph_",year-1,".nc"))
+
+tmmn <- compile_gridmet_data(nc_path = tmmn_path,
                                   param_name = "air_temperature",
                                   start_date = paste0(year,"-01-01"),
                                   end_date = paste0(year,"-12-30"),
@@ -48,7 +67,25 @@ tmmn <- compile_gridmet_data(nc_path = tmmn_path,
                                   field_na_drop = "STATE",
                                   agg_field_name = "mean_tmmn")
 
-tmmx <- compile_gridmet_data(nc_path = tmmx_path, 
+tmmn_summer <- compile_gridmet_data(nc_path = tmmn_path,
+                                    param_name = "air_temperature",
+                                    start_date = paste0(year,"-06-01"),
+                                    end_date = paste0(year, "-08-31"),
+                                    agg_fun = mean,
+                                    shape_obj = cs_inland,
+                                    extra_fields_name = c("STATE","COUNTY",
+                                                          "NAME","FIPS"),
+                                    group_field_name = "FIPS",
+                                    field_na_drop = "STATE",
+                                    agg_field_name = "mean_summer_tmmn")
+
+tmmn_winter <- compute_winter(path_cy = tmmn_path,
+                              path_ly = tmmn_path_ly,
+                              year_cy = year,
+                              param_name = "air_temperature",
+                              field_name = "winter_tmmn")
+
+tmmx <- compile_gridmet_data(nc_path = tmmx_path,
                                   param_name = "air_temperature",
                                   start_date = paste0(year,"-01-01"),
                                   end_date = paste0(year,"-12-30"),
@@ -60,7 +97,25 @@ tmmx <- compile_gridmet_data(nc_path = tmmx_path,
                                   field_na_drop = "STATE",
                                   agg_field_name = "mean_tmmx")
 
-rmn <- compile_gridmet_data(nc_path = rmin_path, 
+tmmx_summer <- compile_gridmet_data(nc_path = tmmx_path,
+                                    param_name = "air_temperature",
+                                    start_date = paste0(year,"-06-01"),
+                                    end_date = paste0(year, "-08-31"),
+                                    agg_fun = mean,
+                                    shape_obj = cs_inland,
+                                    extra_fields_name = c("STATE","COUNTY",
+                                                          "NAME","FIPS"),
+                                    group_field_name = "FIPS",
+                                    field_na_drop = "STATE",
+                                    agg_field_name = "mean_summer_tmmx")
+
+tmmx_winter <- compute_winter(path_cy = tmmx_path,
+                              path_ly = tmmx_path_ly,
+                              year_cy = year,
+                              param_name = "air_temperature",
+                              field_name = "winter_tmmx")
+
+rmn <- compile_gridmet_data(nc_path = rmin_path,
                                   param_name = "relative_humidity",
                                   start_date = paste0(year,"-01-01"),
                                   end_date = paste0(year,"-12-30"),
@@ -72,7 +127,25 @@ rmn <- compile_gridmet_data(nc_path = rmin_path,
                                   field_na_drop = "STATE",
                                   agg_field_name = "mean_rmn")
 
-rmx <- compile_gridmet_data(nc_path = rmax_path, 
+rmn_summer <- compile_gridmet_data(nc_path = rmin_path,
+                                   param_name = "relative_humidity",
+                                   start_date = paste0(year,"-06-01"),
+                                   end_date = paste0(year, "-08-31"),
+                                   agg_fun = mean,
+                                   shape_obj = cs_inland,
+                                   extra_fields_name = c("STATE","COUNTY",
+                                                         "NAME","FIPS"),
+                                   group_field_name = "FIPS",
+                                   field_na_drop = "STATE",
+                                   agg_field_name = "mean_summer_rmn")
+
+rmn_winter <- compute_winter(path_cy = rmin_path,
+                              path_ly = rmin_path_ly,
+                              year_cy = year,
+                              param_name = "relative_humidity",
+                              field_name = "winter_rmn")
+
+rmx <- compile_gridmet_data(nc_path = rmax_path,
                                   param_name = "relative_humidity",
                                   start_date = paste0(year,"-01-01"),
                                   end_date = paste0(year,"-12-30"),
@@ -84,7 +157,25 @@ rmx <- compile_gridmet_data(nc_path = rmax_path,
                                   field_na_drop = "STATE",
                                   agg_field_name = "mean_rmx")
 
-sph <- compile_gridmet_data(nc_path = sph_path, 
+rmx_summer <- compile_gridmet_data(nc_path = rmax_path,
+                                   param_name = "relative_humidity",
+                                   start_date = paste0(year,"-06-01"),
+                                   end_date = paste0(year, "-08-31"),
+                                   agg_fun = mean,
+                                   shape_obj = cs_inland,
+                                   extra_fields_name = c("STATE","COUNTY",
+                                                         "NAME","FIPS"),
+                                   group_field_name = "FIPS",
+                                   field_na_drop = "STATE",
+                                   agg_field_name = "mean_summer_rmx")
+
+rmx_winter <- compute_winter(path_cy = rmax_path,
+                             path_ly = rmax_path_ly,
+                             year_cy = year,
+                             param_name = "relative_humidity",
+                             field_name = "winter_rmx")
+
+sph <- compile_gridmet_data(nc_path = sph_path,
                                  param_name = "specific_humidity",
                                  start_date = paste0(year,"-01-01"),
                                  end_date = paste0(year,"-12-30"),
@@ -96,6 +187,24 @@ sph <- compile_gridmet_data(nc_path = sph_path,
                                  field_na_drop = "STATE",
                                  agg_field_name = "mean_sph")
 
+sph_summer <- compile_gridmet_data(nc_path = sph_path,
+                                   param_name = "specific_humidity",
+                                   start_date = paste0(year,"-06-01"),
+                                   end_date = paste0(year, "-08-31"),
+                                   agg_fun = mean,
+                                   shape_obj = cs_inland,
+                                   extra_fields_name = c("STATE","COUNTY",
+                                                         "NAME","FIPS"),
+                                   group_field_name = "FIPS",
+                                   field_na_drop = "STATE",
+                                   agg_field_name = "mean_summer_sph")
+
+sph_winter <- compute_winter(path_cy = sph_path,
+                             path_ly = sph_path_ly,
+                             year_cy = year,
+                             param_name = "specific_humidity",
+                             field_name = "winter_sph")
+
 ## Merge data
 
 multi_merge <- function(x, y){
@@ -104,10 +213,20 @@ multi_merge <- function(x, y){
 }
 
 df_gridmet <- Reduce(multi_merge, list(tmmn,
+                                       tmmn_summer,
+                                       tmmn_winter,
                                        tmmx,
+                                       tmmx_summer,
+                                       tmmx_winter,
                                        rmn,
+                                       rmn_summer,
+                                       rmn_winter,
                                        rmx,
-                                       sph))
+                                       rmx_summer,
+                                       rmx_winter,
+                                       sph,
+                                       sph_summer,
+                                       sph_winter))
 
 
 assign_data <- function(data, from_fips, to_fips){
@@ -116,9 +235,9 @@ assign_data <- function(data, from_fips, to_fips){
   return(tmp)
 }
 
-# These are independent cities in the Common Wealth Virginia. Since there is no 
+# These are independent cities in the Common Wealth Virginia. Since there is no
 # gridMET data are located in these cities they are missing. In this report
-# We consider assign the surrounding counties values to these cities. 
+# We consider assign the surrounding counties values to these cities.
 
 df_gridmet<- rbind(df_gridmet,
                    assign_data(df_gridmet, 51005, 51580),
@@ -127,7 +246,7 @@ df_gridmet<- rbind(df_gridmet,
                    assign_data(df_gridmet, 51019, 51515))
 
 cn <- colnames(df_gridmet)
-colnames(df_gridmet) <- c(cn[1], paste("gmet_", cn[2:6], sep = ""))
+colnames(df_gridmet) <- c(cn[1], paste("gmet_", cn[2:16], sep = ""))
 return(df_gridmet)
 }
 
@@ -150,4 +269,3 @@ spplot(merged_obj, zcol = "gmet_mean_tmmx",
        col.regions=topo.colors(51, rev = FALSE),
        xlab="Longitude", ylab="Latitude",
        main="Mean daily maximum temprature in the Contiguous United States (2010)")
-
