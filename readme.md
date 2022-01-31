@@ -1,4 +1,4 @@
-# County-Level Public Data for Air Pollution and Health Studies in the Contiguous United States, 2010
+# Synthetic Medicare Data for Environmental Health Studies
 
 Author: Naeem Khoshnevis, Xiao Wu, Danielle Braun
 

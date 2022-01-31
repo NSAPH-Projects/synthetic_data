@@ -1,5 +1,5 @@
 ---
-title: "Public Dataset for Air Pollution and Health Studies, Case Study: 2010 County-Level Dataset for the Contiguous United States"
+title: "Synthetic Medicare Data for Environmental Health Studies"
 output: 
   html_document:
     toc: true
